@@ -1,8 +1,6 @@
 from CoolProp.CoolProp import PropsSI
 from CoolProp.Plots.SimpleCycles import StateContainer
 
-from CoolProp.CoolProp import PropsSI
-from CoolProp.Plots.SimpleCycles import StateContainer
 
 class ReheatRankineCycle:
     """
