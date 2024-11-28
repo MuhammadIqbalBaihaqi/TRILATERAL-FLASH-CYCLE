@@ -4,6 +4,7 @@ from CoolProp.Plots.SimpleCycles import StateContainer
 class RankineCycle:
     """
     Class to compute and store the thermodynamic states of a Rankine cycle.
+    This only works with saturated phase only
     """
 
     def __init__(self, fluid, eta_exp, eta_pum):
