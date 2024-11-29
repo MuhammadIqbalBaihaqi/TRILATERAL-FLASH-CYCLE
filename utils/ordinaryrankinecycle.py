@@ -6,7 +6,7 @@ class ReheatRankineCycle:
     """
     Class to compute and store thermodynamic states for a Rankine cycle with reheating.
     """
-
+    STATECOUNT = 6
     def __init__(self, fluid, eta_turbine_high, eta_turbine_low, eta_pump):
         """
         Initialize the Rankine cycle parameters.
