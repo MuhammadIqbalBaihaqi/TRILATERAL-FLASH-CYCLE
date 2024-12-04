@@ -158,6 +158,6 @@ class ReheatRankineCycle(BaseCycle):
         float
             Thermal efficiency.
         """
-        w_net = self.cycle_states[2].H - self.cycle_states[3].H + self.cycle_states[4].H - self.cycle_states[5].H
+        w_net = self.cycle_states[2].H - self.cycle_states[3].H + self.cycle_states[4].H - self.cycle_states[5].H- (self.cycle_states[1].H - self.cycle_states[0].H)
         q_boiler = self.cycle_states[2].H - self.cycle_states[1].H + self.cycle_states[4].H - self.cycle_states[3].H
         return w_net / q_boiler
