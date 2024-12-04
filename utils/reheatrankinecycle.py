@@ -58,7 +58,7 @@ class ReheatRankineCycle(BaseCycle):
         lambda inp: BaseCycle.state_change(inp, 'H', 'P', 5, ty1='lin', ty2='lin')   # Condenser heat removal
     ]
 
-    def __init__(self, fluid_ref, eta_turbine_high, eta_turbine_low, eta_pump, graph_type="TS", **kwargs):
+    def __init__(self, fluid, eta_turbine_high, eta_turbine_low, eta_pump, graph_type="TS", **kwargs):
         """
         Initialize the Rankine cycle with reheating.
 
