@@ -2,18 +2,30 @@ from CoolProp.CoolProp import PropsSI
 from CoolProp.Plots.SimpleCycles import StateContainer
 
 
-class ReheatRankineCycle:
+from CoolProp.CoolProp import PropsSI
+from CoolProp.Plots.SimpleCycles import StateContainer, BaseCycle
+
+class ReheatRankineCycle(BaseCycle):
     """
     Class to compute and store thermodynamic states for a Rankine cycle with reheating.
     """
     STATECOUNT = 6
-    def __init__(self, fluid, eta_turbine_high, eta_turbine_low, eta_pump):
+    STATECHANGE = [
+        lambda inp: BaseCycle.state_change(inp, 'S', 'P', 0, ty1='log', ty2='log'),  # Pumping process
+        lambda inp: BaseCycle.state_change(inp, 'H', 'P', 1, ty1='lin', ty2='lin'),  # Heat addition (boiler)
+        lambda inp: BaseCycle.state_change(inp, 'H', 'P', 2, ty1='log', ty2='log'),  # High-pressure turbine expansion
+        lambda inp: BaseCycle.state_change(inp, 'H', 'P', 3, ty1='lin', ty2='lin'),  # Reheating
+        lambda inp: BaseCycle.state_change(inp, 'H', 'P', 4, ty1='log', ty2='log'),  # Low-pressure turbine expansion
+        lambda inp: BaseCycle.state_change(inp, 'H', 'P', 5, ty1='lin', ty2='lin')   # Condenser heat removal
+    ]
+
+    def __init__(self, fluid_ref, eta_turbine_high, eta_turbine_low, eta_pump, graph_type="TS", **kwargs):
         """
-        Initialize the Rankine cycle parameters.
+        Initialize the Rankine cycle with reheating.
 
         Parameters:
         -----------
-        fluid : str
+        fluid_ref : str
             Working fluid (e.g., 'Water').
         eta_turbine_high : float
             Isentropic efficiency of the high-pressure turbine.
@@ -22,97 +34,95 @@ class ReheatRankineCycle:
         eta_pump : float
             Isentropic efficiency of the pump.
         """
-        self.fluid = fluid
         self.eta_turbine_high = eta_turbine_high
         self.eta_turbine_low = eta_turbine_low
         self.eta_pump = eta_pump
-        self.cycle_states = StateContainer(unit_system="SI")
+        self.fluid_ref = fluid  # Align with the inherited structure
+        super().__init__(fluid, graph_type, **kwargs)
+        # self.eta_turbine_high = eta_turbine_high
+        # self.eta_turbine_low = eta_turbine_low
+        # self.eta_pump = eta_pump
+        # super().__init__(fluid_ref, graph_type, **kwargs)
 
-    def compute_cycle(self, p_high_in, T_high_in, p_high_out, T_reheat_in, p_cond, q_cond):
+    def simple_solve(self, p_high_in, T_high_in, p_high_out, T_reheat_in, p_cond, q_cond, SI=True):
         """
-        Compute the thermodynamic states for the Rankine cycle with reheating.
+        Solve the thermodynamic states for a Rankine cycle with reheating.
 
         Parameters:
         -----------
         p_high_in : float
-            Pressure before the high-pressure turbine (Pa).
+            High-pressure turbine inlet pressure (Pa).
         T_high_in : float
-            Temperature before the high-pressure turbine (K).
+            High-pressure turbine inlet temperature (K).
         p_high_out : float
-            Pressure after the high-pressure turbine (Pa).
+            High-pressure turbine outlet pressure (Pa).
         T_reheat_in : float
-            Temperature after reheating and before the low-pressure turbine (K).
+            Low-pressure turbine inlet temperature (K).
         p_cond : float
-            Condenser (isobar) pressure (Pa).
+            Condenser pressure (Pa).
         q_cond : float
-            Quality after the condenser (0.0 for saturated liquid).
+            Quality after the condenser (e.g., 0.0 for saturated liquid).
         """
-        # State 1: Saturated liquid at condenser pressure
-        self._store_state(1, p_cond, PropsSI("T", "P", p_cond, "Q", q_cond, self.fluid),
-                          PropsSI("H", "P", p_cond, "Q", q_cond, self.fluid),
-                          PropsSI("S", "P", p_cond, "Q", q_cond, self.fluid))
+        cycle_states = StateContainer(unit_system=self._system)
 
-        # State 2: Compressed liquid after the pump
-        p2 = p_high_in
-        h2_isentropic = PropsSI("H", "P", p2, "S", self.cycle_states[1, 'S'], self.fluid)
-        h2 = self.cycle_states[1, 'H'] + (h2_isentropic - self.cycle_states[1, 'H']) / self.eta_pump
-        self._store_state(2, p2, PropsSI("T", "P", p2, "H", h2, self.fluid), h2,
-                          PropsSI("S", "P", p2, "H", h2, self.fluid))
+        # State 0: Saturated liquid at condenser pressure
+        T0 = PropsSI("T", "P", p_cond, "Q", q_cond, self.fluid_ref)
+        h0 = PropsSI("H", "P", p_cond, "Q", q_cond, self.fluid_ref)
+        s0 = PropsSI("S", "P", p_cond, "Q", q_cond, self.fluid_ref)
+        cycle_states[0, 'P'], cycle_states[0, 'T'], cycle_states[0, 'H'], cycle_states[0, 'S'] = p_cond, T0, h0, s0
 
-        # State 3: High-pressure turbine inlet
-        self._store_state(3, p_high_in, T_high_in,
-                          PropsSI("H", "P", p_high_in, "T", T_high_in, self.fluid),
-                          PropsSI("S", "P", p_high_in, "T", T_high_in, self.fluid))
+        # State 1: Pump outlet
+        h1_isentropic = PropsSI("H", "P", p_high_in, "S", s0, self.fluid_ref)
+        h1 = h0 + (h1_isentropic - h0) / self.eta_pump
+        self.state.update(CoolProp.HmassP_INPUTS, h1, p_high_in)
+        T1 = self.state.T()
+        s1 = self.state.smass()
+        cycle_states[1, 'P'], cycle_states[1, 'T'], cycle_states[1, 'H'], cycle_states[1, 'S'] = p_high_in, T1, h1, s1
 
-        # State 4: After high-pressure turbine
-        h4_isentropic = PropsSI("H", "P", p_high_out, "S", self.cycle_states[3, 'S'], self.fluid)
-        h4 = self.cycle_states[3, 'H'] - self.eta_turbine_high * (self.cycle_states[3, 'H'] - h4_isentropic)
-        self._store_state(4, p_high_out, PropsSI("T", "P", p_high_out, "H", h4, self.fluid), h4,
-                          PropsSI("S", "P", p_high_out, "H", h4, self.fluid))
+        # State 2: High-pressure turbine inlet
+        self.state.update(CoolProp.PT_INPUTS, p_high_in, T_high_in)
+        h2 = self.state.hmass()
+        s2 = self.state.smass()
+        cycle_states[2, 'P'], cycle_states[2, 'T'], cycle_states[2, 'H'], cycle_states[2, 'S'] = p_high_in, T_high_in, h2, s2
 
-        # State 5: Low-pressure turbine inlet (reheat stage)
-        self._store_state(5, p_high_out, T_reheat_in,
-                          PropsSI("H", "P", p_high_out, "T", T_reheat_in, self.fluid),
-                          PropsSI("S", "P", p_high_out, "T", T_reheat_in, self.fluid))
+        # State 3: High-pressure turbine outlet
+        h3_isentropic = PropsSI("H", "P", p_high_out, "S", s2, self.fluid_ref)
+        h3 = h2 - self.eta_turbine_high * (h2 - h3_isentropic)
+        self.state.update(CoolProp.HmassP_INPUTS, h3, p_high_out)
+        T3 = self.state.T()
+        s3 = self.state.smass()
+        cycle_states[3, 'P'], cycle_states[3, 'T'], cycle_states[3, 'H'], cycle_states[3, 'S'] = p_high_out, T3, h3, s3
 
-        # State 6: After low-pressure turbine
-        h6_isentropic = PropsSI("H", "P", p_cond, "S", self.cycle_states[5, 'S'], self.fluid)
-        h6 = self.cycle_states[5, 'H'] - self.eta_turbine_low * (self.cycle_states[5, 'H'] - h6_isentropic)
-        self._store_state(6, p_cond, PropsSI("T", "P", p_cond, "H", h6, self.fluid), h6,
-                          PropsSI("S", "P", p_cond, "H", h6, self.fluid))
+        # State 4: Reheat stage
+        self.state.update(CoolProp.PT_INPUTS, p_high_out, T_reheat_in)
+        h4 = self.state.hmass()
+        s4 = self.state.smass()
+        cycle_states[4, 'P'], cycle_states[4, 'T'], cycle_states[4, 'H'], cycle_states[4, 'S'] = p_high_out, T_reheat_in, h4, s4
 
-    def _store_state(self, state_id, p, T, h, s):
+        # State 5: Low-pressure turbine outlet
+        h5_isentropic = PropsSI("H", "P", p_cond, "S", s4, self.fluid_ref)
+        h5 = h4 - self.eta_turbine_low * (h4 - h5_isentropic)
+        self.state.update(CoolProp.HmassP_INPUTS, h5, p_cond)
+        T5 = self.state.T()
+        s5 = self.state.smass()
+        cycle_states[5, 'P'], cycle_states[5, 'T'], cycle_states[5, 'H'], cycle_states[5, 'S'] = p_cond, T5, h5, s5
+
+        self.cycle_states = cycle_states
+        self.fill_states()
+
+    def eta_thermal(self):
         """
-        Store a thermodynamic state in the state container.
-
-        Parameters:
-        -----------
-        state_id : int
-            State identifier.
-        p : float
-            Pressure (Pa).
-        T : float
-            Temperature (K).
-        h : float
-            Enthalpy (J/kg).
-        s : float
-            Entropy (J/(kg·K)).
-        """
-        self.cycle_states[state_id, 'P'] = p
-        self.cycle_states[state_id, 'T'] = T
-        self.cycle_states[state_id, 'H'] = h
-        self.cycle_states[state_id, 'S'] = s
-
-    def get_states(self):
-        """
-        Retrieve the computed cycle states.
+        Calculate the thermal efficiency of the cycle.
 
         Returns:
         --------
-        StateContainer
-            Container with all computed thermodynamic states.
+        float
+            Thermal efficiency.
         """
-        return self.cycle_states
+        w_net = self.cycle_states[2].H - self.cycle_states[3].H + self.cycle_states[4].H - self.cycle_states[5].H
+        q_boiler = self.cycle_states[2].H - self.cycle_states[1].H + self.cycle_states[4].H - self.cycle_states[3].H
+        return w_net / q_boiler
+
 
 
 class RankineCycle:
