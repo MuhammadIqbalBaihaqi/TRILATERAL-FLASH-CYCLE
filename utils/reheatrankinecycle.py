@@ -1,6 +1,49 @@
 from CoolProp.CoolProp import PropsSI
 from CoolProp.Plots.SimpleCycles import StateContainer, BaseCycle
+""" Example usage:
+from CoolProp.Plots import PropertyPlot
+import warnings
+warnings.filterwarnings('ignore')
 
+# Define the system variables
+fluid = 'Water'
+p_high_in = 8e6          # High-pressure turbine inlet pressure (Pa)
+T_high_in = 480 + 273.15 # High-pressure turbine inlet temperature (K)
+p_high_out = 7e5         # High-pressure turbine outlet pressure (Pa)
+T_reheat_in = 440 + 273.15 # Reheat temperature before low-pressure turbine (K)
+eta_turbine_high = 1.0   # High-pressure turbine efficiency
+eta_turbine_low = 1.0    # Low-pressure turbine efficiency
+p_cond = 0.008e6         # Condenser pressure (Pa)
+q_cond = 0.0             # Quality at condenser outlet (saturated liquid)
+eta_pump = 1.0           # Pump efficiency
+
+# Initialize the Rankine cycle with reheating
+rankine_cycle = ReheatRankineCycle(fluid, eta_turbine_high, eta_turbine_low, eta_pump)
+
+# Compute the thermodynamic cycle
+container = rankine_cycle.simple_solve(
+    p_high_in=p_high_in,
+    T_high_in=T_high_in,
+    p_high_out=p_high_out,
+    T_reheat_in=T_reheat_in,
+    p_cond=p_cond,
+    q_cond=q_cond
+)
+
+# Retrieve and display the states
+rankine_cycle.steps = 200
+halo = rankine_cycle.get_state_changes()
+
+plot = PropertyPlot('Water', 'TS')
+plot.calc_isolines(CoolProp.iP, num=15)
+plot.calc_isolines(CoolProp.iQ, num=15)
+plot.draw_process(halo)
+plt.close(rankine_cycle.figure)
+plt.ioff()
+
+# Show the plot
+plot.show()
+"""
 class ReheatRankineCycle(BaseCycle):
     """
     Class to compute and store thermodynamic states for a Rankine cycle with reheating.
