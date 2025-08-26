@@ -35,3 +35,38 @@ def heat_exchanger(stream_hot, stream_cold, T0):
     # Exergy destruction
     return ex_hot + ex_cold
 
+
+
+def work_devices(device_stream, specific_work, gravity, T0):
+    """
+    Calculate specific exergy destruction for work-producing or work-consuming devices (e.g., turbines, compressors, pumps).
+    Assumptions:
+        - Steady-state operation
+        - No heat losses to the environment
+        - Single inlet, single outlet
+    Parameters:
+        device_stream (dict): {
+            "h": {"in": float, "out": float},      # enthalpy (J/kg)
+            "s": {"in": float, "out": float},      # entropy (J/kg.K)
+            "vel": {"in": float, "out": float},    # velocity (m/s)
+            "pos": {"in": float, "out": float}     # position (m)
+        }
+        specific_work (float): Specific work input/output (J/kg)
+        gravity (float): Gravitational acceleration (m/s^2)
+        T0 (float): Ambient (dead state) temperature (K)
+
+    Returns:
+        float: Exergy destruction (W/kg)
+    """
+    h_in = device_stream["h"]["in"]
+    h_out = device_stream["h"]["out"]
+    s_in = device_stream["s"]["in"]
+    s_out = device_stream["s"]["out"]
+    vel_in = device_stream["vel"]["in"]
+    vel_out = device_stream["vel"]["out"]
+    pos_in = device_stream["pos"]["in"]
+    pos_out = device_stream["pos"]["out"]
+
+    ex_flow = (h_in - h_out) - T0 * (s_in - s_out) + (vel_in**2 - vel_out**2) / 2 + gravity * (pos_in - pos_out)
+    return -specific_work + ex_flow
+
